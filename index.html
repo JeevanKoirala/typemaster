@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typing Speed Challenge</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.3/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+
+
+
+        body {
+            font-family: Arial, sans-serif;
+            background: url('https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWl4YTUxczh3bXcycGJia2loazJ0enExMHVsNjdlNHMxdnB0bjQ1MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4aCi2Ov0wtYpG/giphy.gif') no-repeat center center fixed;
+            background-size: cover;
+            color: #ffffff;
+        }
+        #text-to-type span {
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+        .correct {
+            background-color: #48bb78;
+            color: white;
+        }
+        .incorrect {
+            background-color: #f56565;
+            color: white;
+        }
+        #text-to-type {
+            max-height: 4.5em;
+            overflow: hidden;
+        }
+        .transparent {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        button {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #00ff00; /* Matches the green in the GIF */
+        }
+        button:hover {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+        textarea {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+        }
+    </style>
+</head>
+
+
+
+<body class="flex items-center justify-center min-h-screen">
+    <div class="text-center w-full max-w-xl transparent p-4 rounded">
+        <h1 class="text-4xl font-bold mb-4">Typing Speed Challenge</h1>
+        <p class="mb-4">Type the text below as fast as you can!</p>
+        <input type="file" id="upload-file" class="mb-4 px-4 py-2 rounded" accept=".txt">
+        <button id="random-text-btn" class="mb-4 px-4 py-2 rounded">Use Random Text</button>
+        <div class="mb-4">
+            <button id="test-15s" class="px-4 py-2 rounded">15-Second Test</button>
+            <button id="test-30s" class="px-4 py-2 rounded">30-Second Test</button>
+        </div>
+        <div id="text-to-type" class="p-4 rounded mb-4 font-mono text-lg transparent"></div>
+        <textarea id="user-input" class="w-full p-2 mt-4 text-lg border rounded" rows="3" placeholder="Start typing..." disabled></textarea>
+        <div class="mt-4">
+            <p id="timer" class="text-2xl font-semibold">Time: 0</p>
+            <p id="wpm" class="text-xl">WPM: 0</p>
+            <p id="accuracy" class="text-xl">Accuracy: 100%</p>
+        </div>
+        <div id="result" class="mt-4 hidden">
+            <p class="text-3xl">Your Score:</p>
+            <p class="text-2xl">WPM: <span id="final-wpm"></span></p>
+            <p class="text-2xl">Accuracy: <span id="final-accuracy"></span>%</p>
+            <button id="retry-btn" class="mt-4 px-4 py-2 rounded">Retry</button>
+            <button id="next-test-btn" class="mt-4 px-4 py-2 rounded">Start Next Test</button>
+        </div>
+    </div>
+
+
+    <script>
+        const textToTypeElement = document.getElementById("text-to-type");
+        const userInputElement = document.getElementById("user-input");
+        const timerElement = document.getElementById("timer");
+        const wpmElement = document.getElementById("wpm");
+        const accuracyElement = document.getElementById("accuracy");
+        const resultElement = document.getElementById("result");
+        const retryButton = document.getElementById("retry-btn");
+        const nextTestButton = document.getElementById("next-test-btn");
+        const uploadFileElement = document.getElementById("upload-file");
+        const randomTextButton = document.getElementById("random-text-btn");
+        const finalWpmElement = document.getElementById("final-wpm");
+        const finalAccuracyElement = document.getElementById("final-accuracy");
+        const test15sButton = document.getElementById("test-15s");
+        const test30sButton = document.getElementById("test-30s");
+
+        let textSample = "";
+        let startTime, timerInterval;
+        let correctChars = 0;
+        let totalChars = 0;
+        let hasStarted = false;
+        let testDuration = 0; 
+
+        const randomWords = [
+            "apple", "world", "hero", "code", "work", "light", "tree", "mouse", "book", "dream", "star", "ocean", "fire", "magic", "sky"
+        ];
+
+        function generateRandomText() {
+            textSample = Array.from({ length: 50 }, () => randomWords[Math.floor(Math.random() * randomWords.length)]).join(" ");
+            startGame();
+        }
+
+        function displayText() {
+            textToTypeElement.innerHTML = "";
+            textSample.split("").forEach((char, index) => {
+                const span = document.createElement("span");
+                span.textContent = char;
+                span.dataset.index = index;
+                textToTypeElement.appendChild(span);
+            });
+            limitDisplayedLines(0);
+        }
+
+        function limitDisplayedLines(startIndex) {
+            const spans = Array.from(textToTypeElement.querySelectorAll("span"));
+            spans.forEach(span => span.style.display = "none");
+            let lineCount = 0;
+            spans.some((span, index) => {
+                if (index >= startIndex) {
+                    span.style.display = "inline";
+                    if (span.offsetTop > spans[startIndex].offsetTop + (lineCount * 24)) {
+                        lineCount++;
+                        if (lineCount >= 2) {
+                            span.style.display = "none";
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            });
+        }
+
+        function startGame() {
+            userInputElement.value = "";
+            userInputElement.focus();
+            resultElement.classList.add("hidden");
+            correctChars = 0;
+            totalChars = textSample.length;
+            displayText();
+            hasStarted = false;
+            userInputElement.disabled = false;
+            timerElement.textContent = `Time: ${testDuration}`;
+            userInputElement.addEventListener("input", trackInput);
+        }
+
+        function updateTimer() {
+            const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
+            const remainingTime = testDuration - timeElapsed;
+            timerElement.textContent = `Time: ${remainingTime}`;
+
+            if (remainingTime <= 0) {
+                endGame();
+            }
+        }
+
+        function trackInput() {
+            if (!hasStarted) {
+                startTime = Date.now();
+                timerInterval = setInterval(updateTimer, 1000);
+                hasStarted = true;
+            }
+
+            const userText = userInputElement.value;
+            const spans = textToTypeElement.querySelectorAll("span");
+            let correct = 0;
+
+            userText.split("").forEach((char, index) => {
+                if (spans[index]) {
+                    if (char === textSample[index]) {
+                        spans[index].classList.add("correct");
+                        spans[index].classList.remove("incorrect");
+                        correct++;
+                    } else {
+                        spans[index].classList.add("incorrect");
+                        spans[index].classList.remove("correct");
+                    }
+                }
+            });
+
+            correctChars = correct;
+            const timeElapsed = (Date.now() - startTime) / 1000 / 60;
+            const wpm = Math.floor((correctChars / 5) / timeElapsed);
+            const accuracy = Math.round((correctChars / totalChars) * 100);
+
+            wpmElement.textContent = `WPM: ${wpm}`;
+            accuracyElement.textContent = `Accuracy: ${accuracy}%`;
+
+            if (userText === textSample) {
+                endGame();
+            }
+            limitDisplayedLines(userText.length);
+        }
+
+
+
+
+        function endGame() {
+            clearInterval(timerInterval);
+            userInputElement.disabled = true;
+            const timeElapsed = (Date.now() - startTime) / 1000 / 60;
+            const finalWpm = Math.floor((correctChars / 5) / timeElapsed);
+            const finalAccuracy = Math.round((correctChars / totalChars) * 100);
+
+            finalWpmElement.textContent = finalWpm;
+            finalAccuracyElement.textContent = finalAccuracy;
+            resultElement.classList.remove("hidden");
+        }
+
+        retryButton.addEventListener("click", startGame);
+        nextTestButton.addEventListener("click", generateRandomText);
+
+        uploadFileElement.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    textSample = e.target.result.trim();
+                    startGame();
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        
+
+        randomTextButton.addEventListener("click", generateRandomText);
+
+        test15sButton.addEventListener("click", () => {
+            testDuration = 15;
+            generateRandomText();
+        });
+
+        test30sButton.addEventListener("click", () => {
+            testDuration = 30;
+            generateRandomText();
+        });
+
+        generateRandomText();
+    </script>
+</body>
+</html>
